@@ -97,41 +97,74 @@ function strictAlign(subs, cuts){
 //------------------------------------------------
 // ② 最小編集モード
 //------------------------------------------------
-function minimalAlign(subs, cuts){
-  /* ---- 1:1 マッチング (greedy) ---- */
-  const cand=[];
-  subs.forEach((sub,si)=>{
-    const ci = cuts.reduce((best,i,idx)=>
-      Math.abs(i-sub.start)<Math.abs(cuts[best]-sub.start)?idx:best,0);
-    cand.push([Math.abs(cuts[ci]-sub.start), si, ci]);
-  });
-  cand.sort((a,b)=>a[0]-b[0]);
 
-  const sub2cut = Array(subs.length).fill(null);
-  const cutTaken = new Set();
-  cand.forEach(([d,si,ci])=>{
-    if(!cutTaken.has(ci)){ sub2cut[si]=ci; cutTaken.add(ci); }
+// -----------------------------------------------------------
+// ★ 1:1 マッチングを Python と同等に行う関数
+// -----------------------------------------------------------
+function buildOneToOneMap(subs, cuts) {
+  /* Step-1 : 各字幕 → 最寄り cut と距離を求めて配列化 */
+  const cand = [];
+  subs.forEach((sub, si) => {
+    const ci = cuts.reduce((best, val, idx) =>
+      Math.abs(val - sub.start) < Math.abs(cuts[best] - sub.start) ? idx : best, 0);
+    const dist = Math.abs(cuts[ci] - sub.start);
+    cand.push([dist, si, ci]);                     // [距離, 字幕Idx, カットIdx]
   });
 
-  /* ---- タイムライン再構築 ---- */
+  /* Step-2 : 距離の短い順に Greedy ＆ 奪取判定 */
+  cand.sort((a, b) => a[0] - b[0]);               // 昇順
+  const sub2cut = Array(subs.length).fill(null);  // 戻り値
+  const cutOwner = new Map();                     // cutIdx -> [subIdx, dist]
+
+  cand.forEach(([dist, si, ci]) => {
+    if (!cutOwner.has(ci)) {                      // 未使用 cut
+      sub2cut[si] = ci;
+      cutOwner.set(ci, [si, dist]);
+    } else {                                      // 既に誰かが使っている
+      const [prevSi, prevDist] = cutOwner.get(ci);
+      if (dist < prevDist) {                      // 近ければ奪取
+        sub2cut[prevSi] = null;
+        sub2cut[si]     = ci;
+        cutOwner.set(ci, [si, dist]);
+      }
+      // 遠い場合は何もしない（未マッチのまま）
+    }
+  });
+  return sub2cut;
+}
+
+// -----------------------------------------------------------
+// ★ minimalAlign() を buildOneToOneMap() 利用に変更
+// -----------------------------------------------------------
+function minimalAlign(subs, cuts) {
+  const sub2cut = buildOneToOneMap(subs, cuts);
   const out = [];
-  subs.forEach((sub,i)=>{
-    const ci = sub2cut[i];
-    const newStart = (i===0)
-        ? (ci!==null ? cuts[ci] : sub.start)
-        : out[i-1].end;
+  let prevEnd = null;
 
+  subs.forEach((sub, i) => {
+    const ci = sub2cut[i];                         // 対応 cutIdx (null あり)
+    const matchedCut = ci !== null ? cuts[ci] : null;
+
+    // start -------------------------------------------------
+    const newStart = (i === 0)
+        ? (matchedCut !== null ? matchedCut : sub.start)
+        : prevEnd;
+
+    // end ---------------------------------------------------
     let newEnd;
-    if(i+1<subs.length){
-      const nextCi = sub2cut[i+1];
-      if(nextCi!==null) newEnd = cuts[nextCi] + ONE_MS;
-      else              newEnd = newStart + (sub.end - sub.start);
+    if (i + 1 < subs.length) {
+      const nextCi = sub2cut[i + 1];
+      if (nextCi !== null)
+        newEnd = cuts[nextCi] + ONE_MS;
+      else
+        newEnd = newStart + (sub.end - sub.start);
     } else {
       newEnd = newStart + (sub.end - sub.start);
     }
-    if(newEnd<=newStart) newEnd=newStart+ONE_MS;
+    if (newEnd <= newStart) newEnd = newStart + ONE_MS;
 
-    out.push({...sub,start:newStart,end:newEnd});
+    prevEnd = newEnd;
+    out.push({ ...sub, start: newStart, end: newEnd });
   });
   return out;
 }
