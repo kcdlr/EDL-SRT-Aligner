@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>EDL-SRT Aligner</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+ body {font-family:sans-serif;margin:2rem;line-height:1.5}
+ input[type=file]{margin:.4rem 0 1rem}
+ fieldset{margin:1rem 0;padding:1rem;border:1px solid #ccc}
+ .quick-btns button{margin-right:.3rem;margin-top:.3rem}
+ #log{white-space:pre-wrap;border:1px solid #ccc;padding:.7rem;margin-top:1.5rem;font-size:.9rem;color:#444}
+</style>
+</head>
+
+<body>
+<h1>EDL-SRT Aligner</h1>
+
+<!-- ① ファイル選択 ------------------------- -->
+<label>EDL (.edl)
+ <input type="file" id="edlFile" accept=".edl,.txt">
+</label><br>
+<label>SRT (.srt)
+ <input type="file" id="srtFile" accept=".srt,.txt">
+</label>
+
+<!-- ② FPS 入力 ----------------------------- -->
+<fieldset>
+ <legend><strong>FPS (フレームレート)</strong></legend>
+ <input type="number" id="fpsInput" value="60" step="0.001" style="width:6rem">
+ <span>※ 任意値を直接入力できます</span><br><br>
+
+ <div class="quick-btns">
+  よく使う値：
+  <button type="button" onclick="setFps(23.976)">23.976</button>
+  <button type="button" onclick="setFps(24)">24</button>
+  <button type="button" onclick="setFps(25)">25</button>
+  <button type="button" onclick="setFps(29.97)">29.97</button>
+  <button type="button" onclick="setFps(30)">30</button>
+  <button type="button" onclick="setFps(59.94)">59.94</button>
+  <button type="button" onclick="setFps(60)">60</button>
+ </div>
+</fieldset>
+
+<!-- ③ モード選択 --------------------------- -->
+<fieldset>
+ <legend><strong>実行モード</strong></legend>
+
+ <label>
+  <input type="radio" name="mode" value="strict" checked>
+  全一致モード
+ </label>
+ <p style="margin:.2rem 0 .8rem 1.8rem;font-size:.9rem;">
+   ・EEDLを基準にクリップと字幕の長さをすべて同じにする。手動の方が早いって方向け。
+ </p>
+
+ <label>
+  <input type="radio" name="mode" value="minimal">
+  最小一致モード
+ </label>
+ <p style="margin:.2rem 0 0 1.8rem;font-size:.9rem;">
+   ・EDLを基準に最も近いSRTの編集点をのみ変更する。自動になるべく頼る方向け。
+ </p>
+</fieldset>
+
+<button id="runBtn">実　行</button>
+
+<div id="log"></div>
+
+<script src="script.js"></script>
+<script>
+function setFps(v){ document.getElementById('fpsInput').value = v; }
+</script>
+</body>
+</html>
