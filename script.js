@@ -71,27 +71,62 @@ function composeSRT(subs){
 //------------------------------------------------
 // ① 完全一致モード
 //------------------------------------------------
-function strictAlign(subs, cuts){
-  if (cuts.length === 0) return subs;
+function strictAlign(subs, cuts) {
+  // カット点が2つ未満の場合、クリップを定義できないため処理を終了
+  if (cuts.length < 2) {
+    log('⚠️ カット点が2つ未満のため、クリップを形成できません。');
+    return [];
+  }
 
-  const aligned = [];
-  cuts.sort((a,b)=>a-b);
-  // 各字幕開始点を「一番近いカット点」に合わせる
-  const nearest = t => cuts.reduce((a,b)=>Math.abs(b-t)<Math.abs(a-t)?b:a, cuts[0]);
+  // 念のためカット点を昇順にソート
+  cuts.sort((a, b) => a - b);
 
-  subs.forEach((sub,i)=>{
-    const newStart = (i===0) ? nearest(sub.start) : aligned[i-1].end;
-    let newEnd;
-    if(i+1 < subs.length){
-      const baseEnd = nearest(subs[i+1].start);
-      newEnd = baseEnd + ONE_MS;
-    }else{
-      newEnd = newStart + (sub.end - sub.start);
+  const alignedSubs = [];
+  const usedSubIndices = new Set(); // マッチング済みの字幕インデックスを記録
+
+  // 各クリップ区間（カット点i と カット点i+1 の間）に対して処理
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const clipStart = cuts[i];
+    const clipEnd = cuts[i + 1];
+
+    let bestMatchIndex = -1;
+    let minScore = Infinity;
+
+    // --- このクリップに最もフィットする字幕を全字幕から探す ---
+    subs.forEach((sub, subIndex) => {
+      // 未使用の字幕のみを対象とする
+      if (!usedSubIndices.has(subIndex)) {
+        // スコア計算：|開始点誤差| + |終了点誤差|
+        const score = Math.abs(sub.start - clipStart) + Math.abs(sub.end - clipEnd);
+
+        // これまでの最小スコアより小さければ、これをベストマッチ候補とする
+        if (score < minScore) {
+          minScore = score;
+          bestMatchIndex = subIndex;
+        }
+      }
+    });
+
+    // --- ベストマッチが見つかった場合の処理 ---
+    if (bestMatchIndex !== -1) {
+      const originalSub = subs[bestMatchIndex];
+      alignedSubs.push({
+        ...originalSub,
+        start: clipStart, // 開始時間をクリップの開始時間に強制上書き
+        end: clipEnd      // 終了時間をクリップの終了時間に強制上書き
+      });
+      // この字幕を「使用済み」としてマークし、他のクリップの候補にしない
+      usedSubIndices.add(bestMatchIndex);
     }
-    if(newEnd<=newStart) newEnd=newStart+ONE_MS;
-    aligned.push({...sub,start:newStart,end:newEnd});
-  });
-  return aligned;
+  }
+
+  // 最終的にマッチした字幕を時間順にソートし、インデックスを振り直す
+  return alignedSubs
+    .sort((a, b) => a.start - b.start)
+    .map((sub, index) => ({
+      ...sub,
+      index: index + 1
+    }));
 }
 
 //------------------------------------------------
