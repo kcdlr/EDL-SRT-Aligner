@@ -16,7 +16,6 @@
 <body>
 <h1>EDL-SRT Aligner</h1>
 
-<!-- ① ファイル選択 ------------------------- -->
 <label>EDL (.edl)
  <input type="file" id="edlFile" accept=".edl,.txt">
 </label><br>
@@ -24,7 +23,6 @@
  <input type="file" id="srtFile" accept=".srt,.txt">
 </label>
 
-<!-- ② FPS 入力 ----------------------------- -->
 <fieldset>
  <legend><strong>FPS (フレームレート)</strong></legend>
  <input type="number" id="fpsInput" value="60" step="0.001" style="width:6rem">
@@ -42,26 +40,35 @@
  </div>
 </fieldset>
 
-<!-- ③ モード選択 --------------------------- -->
 <fieldset>
  <legend><strong>実行モード</strong></legend>
-
  <label>
   <input type="radio" name="mode" value="strict" checked>
-  全一致モード
+  完全一致モード
  </label>
  <p style="margin:.2rem 0 .8rem 1.8rem;font-size:.9rem;">
-   ・EDLを基準にクリップと字幕の長さをすべて同じにする。手動の方が早いって方向け。
+   EDLのクリップ構造を絶対的な基準とし、字幕を厳密に再配置します。
  </p>
-
  <label>
   <input type="radio" name="mode" value="minimal">
-  最小一致モード
+  最小編集モード
  </label>
  <p style="margin:.2rem 0 0 1.8rem;font-size:.9rem;">
-   ・永年ベータ版です（ところどころ関係のない箇所を変更するバグが起きてます）。EDLを基準に最も近いSRTの編集点をのみ変更する。自動になるべく頼る方向け。
+   字幕の元の長さを維持しつつ、EDLのカット点に最も近い字幕の開始点のみを調整します。
  </p>
 </fieldset>
+
+<fieldset>
+  <legend><strong>詳細オプション</strong></legend>
+  <label>
+    <input type="checkbox" id="offsetCheckbox">
+    1msオフセットを有効にする
+  </label>
+  <p style="margin:.2rem 0 0 1.8rem;font-size:.9rem;">
+    字幕クリップが1フレームずれる場合に有効にします。
+  </p>
+</fieldset>
+
 
 <button id="runBtn">実　行</button>
 
