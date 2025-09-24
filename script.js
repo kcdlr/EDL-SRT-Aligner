@@ -67,7 +67,7 @@ function composeSRT(subs) {
 }
 
 //------------------------------------------------
-// ① 完全一致モード (変更なし)
+// ① 完全一致モード
 //------------------------------------------------
 function strictAlign(subs, cuts) {
   if (cuts.length < 2) {
@@ -76,34 +76,35 @@ function strictAlign(subs, cuts) {
   }
   cuts.sort((a, b) => a - b);
   const alignedSubs = [];
-  const usedSubIndices = new Set();
-
+  const edlClips = [];
   for (let i = 0; i < cuts.length - 1; i++) {
-    const clipStart = cuts[i];
-    const clipEnd = cuts[i + 1];
-    let bestMatchIndex = -1;
+    edlClips.push({ start: cuts[i], end: cuts[i + 1] });
+  }
+
+  // 各EDLクリップに対して、最もズレが小さいSRTクリップを紐付ける
+  edlClips.forEach(clip => {
+    let bestMatchSub = null;
     let minScore = Infinity;
 
-    subs.forEach((sub, subIndex) => {
-      if (!usedSubIndices.has(subIndex)) {
-        const score = Math.abs(sub.start - clipStart) + Math.abs(sub.end - clipEnd);
-        if (score < minScore) {
-          minScore = score;
-          bestMatchIndex = subIndex;
-        }
+    subs.forEach(sub => {
+      const score = Math.abs(sub.start - clip.start) + Math.abs(sub.end - clip.end);
+      if (score < minScore) {
+        minScore = score;
+        bestMatchSub = sub;
       }
     });
 
-    if (bestMatchIndex !== -1) {
-      const originalSub = subs[bestMatchIndex];
+    // 最も見つかった場合は、その字幕内容を使って新しいクリップを作成
+    if (bestMatchSub) {
       alignedSubs.push({
-        ...originalSub,
-        start: clipStart,
-        end: clipEnd
+        ...bestMatchSub, // contentと他のプロパティをコピー
+        start: clip.start, // 時間はEDLクリップに合わせる
+        end: clip.end
       });
-      usedSubIndices.add(bestMatchIndex);
     }
-  }
+  });
+
+  // 開始時間でソートして、インデックスを振り直す
   return alignedSubs
     .sort((a, b) => a.start - b.start)
     .map((sub, index) => ({
