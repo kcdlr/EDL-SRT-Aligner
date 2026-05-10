@@ -5,74 +5,427 @@
 <title>EDL-SRT Aligner</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
- body {font-family:sans-serif;margin:2rem;line-height:1.5}
- input[type=file]{margin:.4rem 0 1rem}
- fieldset{margin:1rem 0;padding:1rem;border:1px solid #ccc}
- .quick-btns button{margin-right:.3rem;margin-top:.3rem}
- #log{white-space:pre-wrap;border:1px solid #ccc;padding:.7rem;margin-top:1.5rem;font-size:.9rem;color:#444}
+ :root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --border: #d8dee8;
+  --border-strong: #b8c2d2;
+  --text: #1f2937;
+  --muted: #5f6b7a;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #e8f0ff;
+  --focus: #93c5fd;
+  --shadow: 0 14px 40px rgba(31, 41, 55, .08);
+ }
+
+ * { box-sizing: border-box; }
+
+ body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
+ }
+
+ .shell {
+  width: min(1040px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 40px;
+ }
+
+ .app-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+ }
+
+ h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 3vw, 2.3rem);
+  line-height: 1.15;
+  letter-spacing: 0;
+ }
+
+ .subtitle {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: .96rem;
+ }
+
+ .version {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: .86rem;
+ }
+
+ .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+ }
+
+ .section {
+  padding: 22px;
+  border-top: 1px solid var(--border);
+ }
+
+ .section:first-child { border-top: 0; }
+
+ .section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+ }
+
+ h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0;
+ }
+
+ .hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: .88rem;
+ }
+
+ .file-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+ }
+
+ .file-field,
+ .setting-row,
+ .option {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+ }
+
+ .file-field {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+ }
+
+ .label-text {
+  font-weight: 700;
+  font-size: .92rem;
+ }
+
+ input[type="file"],
+ input[type="number"] {
+  width: 100%;
+  color: var(--text);
+  font: inherit;
+ }
+
+ input[type="file"] {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 6px;
+ }
+
+ input[type="file"]::file-selector-button {
+  min-height: 28px;
+  margin-right: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: #eef2f7;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+ }
+
+ input[type="number"] {
+  max-width: 140px;
+  min-height: 40px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 7px 10px;
+ }
+
+ input:focus-visible,
+ button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+ }
+
+ .setting-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 14px;
+ }
+
+ .fps-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+ }
+
+ .quick-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+ }
+
+ .quick-btns span {
+  color: var(--muted);
+  font-size: .88rem;
+ }
+
+ button {
+  min-height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+ }
+
+ .quick-btns button {
+  min-width: 58px;
+  padding: 6px 10px;
+ }
+
+ button:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+ }
+
+ .option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+ }
+
+ .option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 14px;
+  cursor: pointer;
+ }
+
+ .option input {
+  margin-top: .25rem;
+  accent-color: var(--accent);
+ }
+
+ .option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+ }
+
+ .option-title {
+  display: block;
+  font-weight: 700;
+ }
+
+ .option-desc {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: .9rem;
+ }
+
+ .single-option {
+  max-width: 520px;
+ }
+
+ .actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #fbfcff;
+ }
+
+ .run-button {
+  min-width: 150px;
+  min-height: 44px;
+  padding: 9px 18px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+ }
+
+ .run-button:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+ }
+
+ .log-wrap {
+  display: grid;
+  gap: 10px;
+ }
+
+ #log {
+  min-height: 120px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+  padding: 14px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: .88rem;
+ }
+
+ @media (max-width: 760px) {
+  .shell {
+   width: min(100% - 24px, 1040px);
+   padding-top: 20px;
+  }
+
+  .app-header,
+  .actions {
+   align-items: stretch;
+   flex-direction: column;
+  }
+
+  .file-grid,
+  .option-grid {
+   grid-template-columns: 1fr;
+  }
+
+  .section {
+   padding: 18px;
+  }
+
+  .run-button {
+   width: 100%;
+  }
+ }
 </style>
 </head>
 
 <body>
-<h1>EDL-SRT Aligner</h1>
+<main class="shell">
+ <header class="app-header">
+  <div>
+   <h1>EDL-SRT Aligner</h1>
+   <p class="subtitle">EDLの編集点に合わせて、SRT字幕のタイミングを整えます。</p>
+  </div>
+  <div class="version">Client-side tool</div>
+ </header>
 
-<label>EDL (.edl)
- <input type="file" id="edlFile" accept=".edl,.txt">
-</label><br>
-<label>SRT (.srt)
- <input type="file" id="srtFile" accept=".srt,.txt">
-</label>
+ <div class="panel">
+  <section class="section">
+   <div class="section-title">
+    <h2>入力ファイル</h2>
+    <p class="hint">EDLとSRTの両方を選択してください</p>
+   </div>
 
-<fieldset>
- <legend><strong>FPS (フレームレート)</strong></legend>
- <input type="number" id="fpsInput" value="60" step="0.001" style="width:6rem">
- <span>※ 任意値を直接入力できます</span><br><br>
+   <div class="file-grid">
+    <label class="file-field">
+     <span class="label-text">EDL ファイル</span>
+     <input type="file" id="edlFile" accept=".edl,.txt">
+    </label>
+    <label class="file-field">
+     <span class="label-text">SRT ファイル</span>
+     <input type="file" id="srtFile" accept=".srt,.txt">
+    </label>
+   </div>
+  </section>
 
- <div class="quick-btns">
-  よく使う値：
-  <button type="button" onclick="setFps(23.976)">23.976</button>
-  <button type="button" onclick="setFps(24)">24</button>
-  <button type="button" onclick="setFps(25)">25</button>
-  <button type="button" onclick="setFps(29.97)">29.97</button>
-  <button type="button" onclick="setFps(30)">30</button>
-  <button type="button" onclick="setFps(59.94)">59.94</button>
-  <button type="button" onclick="setFps(60)">60</button>
- </div>
-</fieldset>
+  <section class="section">
+   <div class="section-title">
+    <h2>フレームレート</h2>
+    <p class="hint">任意の値を直接入力できます</p>
+   </div>
 
-<fieldset>
- <legend><strong>実行モード</strong></legend>
- <label>
-  <input type="radio" name="mode" value="strict" checked>
-  クリップ数一致モード
- </label>
- <p style="margin:.2rem 0 .8rem 1.8rem;font-size:.9rem;">
-   EDLのクリップ数に合わせて字幕を出力します。各EDLクリップに対して、始点と終点のズレが最小となる字幕本文を入れ、時間はEDLのクリップ範囲に合わせます。元の字幕が複数回使われる場合があります。
- </p>
- <label>
-  <input type="radio" name="mode" value="minimal">
-  編集点合わせモード（試験段階）
- </label>
- <p style="margin:.2rem 0 0 1.8rem;font-size:.9rem;">
-   元の字幕数を維持したまま、EDLの編集点から1秒以内にある字幕の切れ目を合わせます。1つのEDLクリップ内に複数の字幕が入る場合があります。字幕クリップの削除は行われません。
- </p>
-</fieldset>
+   <div class="setting-row">
+    <label class="fps-control">
+     <span class="label-text">FPS</span>
+     <input type="number" id="fpsInput" value="60" step="0.001">
+    </label>
+    <div class="quick-btns" aria-label="よく使うFPS">
+     <span>よく使う値</span>
+     <button type="button" onclick="setFps(23.976)">23.976</button>
+     <button type="button" onclick="setFps(24)">24</button>
+     <button type="button" onclick="setFps(25)">25</button>
+     <button type="button" onclick="setFps(29.97)">29.97</button>
+     <button type="button" onclick="setFps(30)">30</button>
+     <button type="button" onclick="setFps(59.94)">59.94</button>
+     <button type="button" onclick="setFps(60)">60</button>
+    </div>
+   </div>
+  </section>
 
-<fieldset>
-  <legend><strong>詳細オプション</strong></legend>
-  <label>
+  <section class="section">
+   <div class="section-title">
+    <h2>実行モード</h2>
+   </div>
+
+   <div class="option-grid">
+    <label class="option">
+     <input type="radio" name="mode" value="strict" checked>
+     <span>
+      <span class="option-title">クリップ数一致モード</span>
+      <span class="option-desc">EDLのクリップ数に合わせて字幕を出力します。各EDLクリップに対して、始点と終点のズレが最小となる字幕本文を入れ、時間はEDLのクリップ範囲に合わせます。元の字幕が複数回使われる場合があります。</span>
+     </span>
+    </label>
+
+    <label class="option">
+     <input type="radio" name="mode" value="minimal">
+     <span>
+      <span class="option-title">編集点合わせモード（試験段階）</span>
+      <span class="option-desc">元の字幕数を維持したまま、EDLの編集点から1秒以内にある字幕の切れ目を合わせます。1つのEDLクリップ内に複数の字幕が入る場合があります。字幕クリップの削除は行われません。</span>
+     </span>
+    </label>
+   </div>
+  </section>
+
+  <section class="section">
+   <div class="section-title">
+    <h2>詳細オプション</h2>
+   </div>
+
+   <label class="option single-option">
     <input type="checkbox" id="offsetCheckbox">
-    1msオフセットを有効にする
-  </label>
-  <p style="margin:.2rem 0 0 1.8rem;font-size:.9rem;">
-    字幕クリップが1フレームずれる場合に有効にします。
-  </p>
-</fieldset>
+    <span>
+     <span class="option-title">1msオフセットを有効にする</span>
+     <span class="option-desc">字幕クリップが1フレームずれる場合に使用します。</span>
+    </span>
+   </label>
+  </section>
 
+  <section class="section actions">
+   <button id="runBtn" class="run-button">実行してSRTを書き出す</button>
+   <p class="hint">処理はブラウザ内で完結します。</p>
+  </section>
 
-<button id="runBtn">実　行</button>
-
-<div id="log"></div>
+  <section class="section log-wrap">
+   <div class="section-title">
+    <h2>処理ログ</h2>
+   </div>
+   <div id="log" aria-live="polite"></div>
+  </section>
+ </div>
+</main>
 
 <script src="script.js"></script>
 <script>
