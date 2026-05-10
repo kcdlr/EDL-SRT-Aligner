@@ -44,17 +44,17 @@
  <legend><strong>実行モード</strong></legend>
  <label>
   <input type="radio" name="mode" value="strict" checked>
-  完全一致モード（EDL優先）
+  クリップ数一致モード
  </label>
  <p style="margin:.2rem 0 .8rem 1.8rem;font-size:.9rem;">
-   EDLの各クリップごとに、始点と終点のズレが最小となる字幕クリップを探し、その字幕本文をEDLのクリップ範囲に合わせて出力します。同じ字幕が複数回使われる場合があります。EDLに対応しない字幕は出力されません。
+   EDLのクリップ数に合わせて字幕を出力します。各EDLクリップに対して、始点と終点のズレが最小となる字幕本文を入れ、時間はEDLのクリップ範囲に合わせます。元の字幕が複数回使われる場合があります。
  </p>
  <label>
   <input type="radio" name="mode" value="minimal">
-  最小編集モード（試験段階）
+  編集点合わせモード（試験段階）
  </label>
  <p style="margin:.2rem 0 0 1.8rem;font-size:.9rem;">
-   EDLの編集点に最も近い字幕の編集点のみを調整します。編集点の最も近い点同士が優先されます。字幕クリップの削除は行われません。なるべく自動に頼りたい方向けです。
+   元の字幕数を維持したまま、EDLの編集点に近い字幕の切れ目を合わせます。1つのEDLクリップ内に複数の字幕が入る場合があります。字幕クリップの削除は行われません。
  </p>
 </fieldset>
 
