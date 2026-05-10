@@ -44,10 +44,10 @@
  <legend><strong>実行モード</strong></legend>
  <label>
   <input type="radio" name="mode" value="strict" checked>
-  完全一致モード
+  完全一致モード（EDL優先）
  </label>
  <p style="margin:.2rem 0 .8rem 1.8rem;font-size:.9rem;">
-   EDLのクリップと字幕クリップを１：１で関連付けます。始点と終点の両方のズレが最小となる字幕クリップが優先されます。余った字幕クリップは削除されます。中間の字幕は手動で合わせた方が結局早いっていう方向けです。
+   EDLの各クリップごとに、始点と終点のズレが最小となる字幕クリップを探し、その字幕本文をEDLのクリップ範囲に合わせて出力します。同じ字幕が複数回使われる場合があります。EDLに対応しない字幕は出力されません。
  </p>
  <label>
   <input type="radio" name="mode" value="minimal">
