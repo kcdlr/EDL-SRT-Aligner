@@ -9,6 +9,8 @@
 
 const logBox = document.getElementById('log');
 const ONE_MS = 0.001; // 秒単位の 1ms (オフセット処理で使用)
+const BOUNDARY_MERGE_TOLERANCE = 0.002; // 同じ字幕境界として扱う許容差
+const MAX_CUT_SNAP_DISTANCE = 1.0; // EDLカットへ寄せる最大距離（秒）
 
 //------------------------------------------------
 // 共通ユーティリティ
@@ -24,10 +26,11 @@ function srtTimeToSec(str) { // "HH:MM:SS,mmm" → 秒
   return h * 3600 + m * 60 + +s + (+ms) / 1000;
 }
 function secToSrtTime(sec) {
-  const H = Math.floor(sec / 3600);
-  const M = Math.floor(sec % 3600 / 60);
-  const S = Math.floor(sec % 60);
-  const ms = Math.round((sec - Math.floor(sec)) * 1000);
+  const totalMs = Math.max(0, Math.round(sec * 1000));
+  const H = Math.floor(totalMs / 3600000);
+  const M = Math.floor(totalMs % 3600000 / 60000);
+  const S = Math.floor(totalMs % 60000 / 1000);
+  const ms = totalMs % 1000;
   return `${pad(H)}:${pad(M)}:${pad(S)},${pad(ms, 3)}`;
 }
 
@@ -114,63 +117,95 @@ function strictAlign(subs, cuts) {
 }
 
 //------------------------------------------------
-// ② 最小編集モード (ONE_MSの利用箇所を修正)
+// ② 編集点合わせモード
 //------------------------------------------------
-function buildOneToOneMap(subs, cuts) {
-  const cand = [];
-  subs.forEach((sub, si) => {
-    const ci = cuts.reduce((best, val, idx) =>
-      Math.abs(val - sub.start) < Math.abs(cuts[best] - sub.start) ? idx : best, 0);
-    const dist = Math.abs(cuts[ci] - sub.start);
-    cand.push([dist, si, ci]);
+function buildSubtitleBoundaryGroups(subs) {
+  const points = [];
+  subs.forEach((sub, index) => {
+    points.push({ time: sub.start, ref: { index, edge: 'start' } });
+    points.push({ time: sub.end, ref: { index, edge: 'end' } });
   });
-  cand.sort((a, b) => a[0] - b[0]);
-  const sub2cut = Array(subs.length).fill(null);
-  const cutOwner = new Map();
-  cand.forEach(([dist, si, ci]) => {
-    if (!cutOwner.has(ci)) {
-      sub2cut[si] = ci;
-      cutOwner.set(ci, [si, dist]);
+
+  points.sort((a, b) => a.time - b.time);
+
+  const groups = [];
+  points.forEach(point => {
+    const last = groups[groups.length - 1];
+    if (last && Math.abs(point.time - last.time) <= BOUNDARY_MERGE_TOLERANCE) {
+      last.refs.push(point.ref);
+      last.timeSum += point.time;
+      last.time = last.timeSum / last.refs.length;
     } else {
-      const [prevSi, prevDist] = cutOwner.get(ci);
-      if (dist < prevDist) {
-        sub2cut[prevSi] = null;
-        sub2cut[si] = ci;
-        cutOwner.set(ci, [si, dist]);
-      }
+      groups.push({
+        time: point.time,
+        timeSum: point.time,
+        refs: [point.ref],
+        target: null
+      });
     }
   });
-  return sub2cut;
+
+  return groups;
+}
+
+function matchBoundariesToCuts(boundaryGroups, cuts) {
+  const sortedCuts = [...cuts].sort((a, b) => a - b);
+  let cutStartIndex = 0;
+  let matchCount = 0;
+
+  boundaryGroups.forEach(group => {
+    let bestCutIndex = -1;
+    let bestDistance = Infinity;
+
+    while (
+      cutStartIndex < sortedCuts.length &&
+      sortedCuts[cutStartIndex] < group.time - MAX_CUT_SNAP_DISTANCE
+    ) {
+      cutStartIndex++;
+    }
+
+    for (let i = cutStartIndex; i < sortedCuts.length; i++) {
+      const cut = sortedCuts[i];
+      if (cut > group.time + MAX_CUT_SNAP_DISTANCE) break;
+
+      const distance = Math.abs(cut - group.time);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestCutIndex = i;
+      }
+    }
+
+    if (bestCutIndex !== -1) {
+      group.target = sortedCuts[bestCutIndex];
+      cutStartIndex = bestCutIndex + 1;
+      matchCount++;
+    }
+  });
+
+  return matchCount;
 }
 
 function minimalAlign(subs, cuts) {
-  const sub2cut = buildOneToOneMap(subs, cuts);
-  const out = [];
-  let prevEnd = null;
-  subs.forEach((sub, i) => {
-    const ci = sub2cut[i];
-    const matchedCut = ci !== null ? cuts[ci] : null;
-    const newStart = (i === 0)
-      ? (matchedCut !== null ? matchedCut : sub.start)
-      : prevEnd;
+  if (subs.length === 0 || cuts.length === 0) return subs;
 
-    let newEnd;
-    if (i + 1 < subs.length) {
-      const nextCi = sub2cut[i + 1];
-      if (nextCi !== null)
-        newEnd = cuts[nextCi]; // ★★★ ONE_MSの加算を削除 ★★★
-      else
-        newEnd = newStart + (sub.end - sub.start);
-    } else {
-      newEnd = newStart + (sub.end - sub.start);
-    }
-    // ゼロ/負のデュレーションを防ぐための安全装置は残す
-    if (newEnd <= newStart) newEnd = newStart + ONE_MS;
+  const out = subs.map(sub => ({ ...sub }));
+  const boundaryGroups = buildSubtitleBoundaryGroups(subs);
+  const matchCount = matchBoundariesToCuts(boundaryGroups, cuts);
 
-    prevEnd = newEnd;
-    out.push({ ...sub, start: newStart, end: newEnd });
+  boundaryGroups.forEach(group => {
+    if (group.target === null) return;
+
+    group.refs.forEach(ref => {
+      out[ref.index][ref.edge] = group.target;
+    });
   });
-  return out;
+
+  out.forEach(sub => {
+    if (sub.end <= sub.start) sub.end = sub.start + ONE_MS;
+  });
+
+  log(`編集点合わせ: ${matchCount}箇所の字幕境界をEDLカットに合わせました。`);
+  return out.map((sub, index) => ({ ...sub, index: index + 1 }));
 }
 
 //------------------------------------------------
