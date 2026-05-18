@@ -10,7 +10,9 @@
 const logBox = document.getElementById('log');
 const ONE_MS = 0.001; // 秒単位の 1ms (オフセット処理で使用)
 const BOUNDARY_MERGE_TOLERANCE = 0.002; // 同じ字幕境界として扱う許容差
-const MAX_CUT_SNAP_DISTANCE = 1.0; // EDLカットへ寄せる最大距離（秒）
+const DEFAULT_CUT_SNAP_DISTANCE = 1.0; // EDLカットへ寄せる既定距離（秒）
+const SETTINGS_STORAGE_KEY = 'edl-srt-aligner:settings:v1';
+const CUT_KEY_PRECISION = 6;
 
 //------------------------------------------------
 // 共通ユーティリティ
@@ -148,10 +150,15 @@ function buildSubtitleBoundaryGroups(subs) {
   return groups;
 }
 
-function matchBoundariesToCuts(boundaryGroups, cuts) {
+function getCutKey(cut) {
+  return cut.toFixed(CUT_KEY_PRECISION);
+}
+
+function matchBoundariesToCuts(boundaryGroups, cuts, snapThresholdSec) {
   const sortedCuts = [...cuts].sort((a, b) => a - b);
   let cutStartIndex = 0;
   let matchCount = 0;
+  const usedCutKeys = new Set();
 
   boundaryGroups.forEach(group => {
     let bestCutIndex = -1;
@@ -159,14 +166,14 @@ function matchBoundariesToCuts(boundaryGroups, cuts) {
 
     while (
       cutStartIndex < sortedCuts.length &&
-      sortedCuts[cutStartIndex] < group.time - MAX_CUT_SNAP_DISTANCE
+      sortedCuts[cutStartIndex] < group.time - snapThresholdSec
     ) {
       cutStartIndex++;
     }
 
     for (let i = cutStartIndex; i < sortedCuts.length; i++) {
       const cut = sortedCuts[i];
-      if (cut > group.time + MAX_CUT_SNAP_DISTANCE) break;
+      if (cut > group.time + snapThresholdSec) break;
 
       const distance = Math.abs(cut - group.time);
       if (distance < bestDistance) {
@@ -178,19 +185,58 @@ function matchBoundariesToCuts(boundaryGroups, cuts) {
     if (bestCutIndex !== -1) {
       group.target = sortedCuts[bestCutIndex];
       cutStartIndex = bestCutIndex + 1;
+      usedCutKeys.add(getCutKey(group.target));
       matchCount++;
     }
   });
 
-  return matchCount;
+  return { matchCount, usedCutKeys };
 }
 
-function minimalAlign(subs, cuts) {
+function splitSubtitlesByUnusedCuts(subs, cuts, usedCutKeys) {
+  const unusedCuts = [...cuts]
+    .filter(cut => !usedCutKeys.has(getCutKey(cut)))
+    .sort((a, b) => a - b);
+  const splitCutKeys = new Set();
+  const splitSubs = [];
+
+  subs.forEach(sub => {
+    const internalCuts = unusedCuts.filter(cut => cut > sub.start && cut < sub.end);
+
+    if (internalCuts.length === 0) {
+      splitSubs.push(sub);
+      return;
+    }
+
+    const points = [sub.start, ...internalCuts, sub.end];
+    internalCuts.forEach(cut => splitCutKeys.add(getCutKey(cut)));
+
+    for (let i = 0; i < points.length - 1; i++) {
+      splitSubs.push({
+        ...sub,
+        start: points[i],
+        end: points[i + 1]
+      });
+    }
+  });
+
+  return {
+    splitSubs,
+    splitCount: splitCutKeys.size
+  };
+}
+
+function minimalAlign(subs, cuts, options = {}) {
   if (subs.length === 0 || cuts.length === 0) return subs;
 
+  const snapThresholdSec = options.snapThresholdSec ?? DEFAULT_CUT_SNAP_DISTANCE;
   const out = subs.map(sub => ({ ...sub }));
   const boundaryGroups = buildSubtitleBoundaryGroups(subs);
-  const matchCount = matchBoundariesToCuts(boundaryGroups, cuts);
+  const { matchCount, usedCutKeys } = matchBoundariesToCuts(
+    boundaryGroups,
+    cuts,
+    snapThresholdSec
+  );
 
   boundaryGroups.forEach(group => {
     if (group.target === null) return;
@@ -200,12 +246,86 @@ function minimalAlign(subs, cuts) {
     });
   });
 
-  out.forEach(sub => {
+  const { splitSubs, splitCount } = splitSubtitlesByUnusedCuts(out, cuts, usedCutKeys);
+
+  splitSubs.forEach(sub => {
     if (sub.end <= sub.start) sub.end = sub.start + ONE_MS;
   });
 
   log(`編集点合わせ: ${matchCount}箇所の字幕境界をEDLカットに合わせました。`);
-  return out.map((sub, index) => ({ ...sub, index: index + 1 }));
+  log(`編集点合わせ: ${splitCount}箇所のEDLカットで字幕を分割しました。`);
+  log(`編集点合わせ: 分割後の字幕行数は${splitSubs.length}行です。`);
+  return splitSubs.map((sub, index) => ({ ...sub, index: index + 1 }));
+}
+
+//------------------------------------------------
+// 設定の保存・復元
+//------------------------------------------------
+function parsePositiveNumber(value, fallback) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function getSnapThresholdSec() {
+  const input = document.getElementById('snapThresholdInput');
+  return parsePositiveNumber(input.value, DEFAULT_CUT_SNAP_DISTANCE);
+}
+
+function getSettings() {
+  const checkedMode = document.querySelector('input[name="mode"]:checked');
+  return {
+    fps: document.getElementById('fpsInput').value,
+    mode: checkedMode ? checkedMode.value : 'strict',
+    applyOffset: document.getElementById('offsetCheckbox').checked,
+    snapThresholdSec: document.getElementById('snapThresholdInput').value
+  };
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(getSettings()));
+  } catch (error) {
+    // localStorageが使えない環境では保存だけを諦める
+  }
+}
+
+function restoreSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return;
+
+    const settings = JSON.parse(raw);
+    if (settings.fps !== undefined) {
+      document.getElementById('fpsInput').value = settings.fps;
+    }
+    if (settings.snapThresholdSec !== undefined) {
+      document.getElementById('snapThresholdInput').value = settings.snapThresholdSec;
+    }
+    if (settings.applyOffset !== undefined) {
+      document.getElementById('offsetCheckbox').checked = Boolean(settings.applyOffset);
+    }
+    if (settings.mode) {
+      document.querySelectorAll('input[name="mode"]').forEach(input => {
+        input.checked = input.value === settings.mode;
+      });
+    }
+  } catch (error) {
+    // 壊れた保存データは無視して初期値で続行する
+  }
+}
+
+function bindSettingsStorage() {
+  document.getElementById('fpsInput').addEventListener('input', saveSettings);
+  document.getElementById('snapThresholdInput').addEventListener('input', saveSettings);
+  document.getElementById('offsetCheckbox').addEventListener('change', saveSettings);
+  document.querySelectorAll('input[name="mode"]').forEach(input => {
+    input.addEventListener('change', saveSettings);
+  });
+}
+
+function setFps(v) {
+  document.getElementById('fpsInput').value = String(v);
+  saveSettings();
 }
 
 //------------------------------------------------
@@ -217,6 +337,7 @@ async function run() {
   const srtFile = document.getElementById('srtFile').files[0];
   const fps = parseFloat(document.getElementById('fpsInput').value) || 60;
   const mode = document.querySelector('input[name="mode"]:checked').value;
+  const snapThresholdSec = getSnapThresholdSec();
   // ★★★ オフセットオプションを読み込む ★★★
   const applyOffset = document.getElementById('offsetCheckbox').checked;
 
@@ -230,11 +351,12 @@ async function run() {
   log(`カット点   : ${cuts.length}`);
   log(`字幕行数   : ${subs.length}`);
   log(`モード     : ${mode === 'strict' ? 'クリップ数一致' : '編集点合わせ'}`);
+  if (mode === 'minimal') log(`編集点合わせの許容ずれ: ${snapThresholdSec}秒`);
   log(`1msオフセット: ${applyOffset ? '有効' : '無効'}`); // ログ表示
 
   // Step 1: モードに応じてアライメント処理を実行
   const alignedSubs = (mode === 'strict') ? strictAlign(subs, cuts)
-    : minimalAlign(subs, cuts);
+    : minimalAlign(subs, cuts, { snapThresholdSec });
 
   // Step 2: ★★★ オフセットが有効な場合、全字幕の時間をずらす ★★★
   const offset = applyOffset ? ONE_MS : 0;
@@ -261,4 +383,6 @@ function download(content, filename) {
 //------------------------------------------------
 // イベント
 //------------------------------------------------
+restoreSettings();
+bindSettingsStorage();
 document.getElementById('runBtn').addEventListener('click', run);

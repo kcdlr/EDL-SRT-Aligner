@@ -251,6 +251,16 @@
   max-width: 520px;
  }
 
+ .detail-options {
+  display: grid;
+  gap: 14px;
+ }
+
+ .threshold-control {
+  display: grid;
+  gap: 6px;
+ }
+
  .actions {
   display: flex;
   align-items: center;
@@ -393,7 +403,7 @@
      <input type="radio" name="mode" value="minimal">
      <span>
       <span class="option-title">編集点合わせモード（試験段階）</span>
-      <span class="option-desc">元の字幕数を維持したまま、EDLの編集点から1秒以内にある字幕の切れ目を合わせます。1つのEDLクリップ内に複数の字幕が入る場合があります。字幕クリップの削除は行われません。</span>
+      <span class="option-desc">字幕境界が許容ずれ以内ならEDLの編集点へ吸着し、超える場合は字幕の途中にあるEDL編集点で分割します。字幕クリップの削除は行われません。</span>
      </span>
     </label>
    </div>
@@ -404,13 +414,23 @@
     <h2>詳細オプション</h2>
    </div>
 
-   <label class="option single-option">
-    <input type="checkbox" id="offsetCheckbox">
-    <span>
-     <span class="option-title">1msオフセットを有効にする</span>
-     <span class="option-desc">字幕クリップが1フレームずれる場合に使用します。</span>
-    </span>
-   </label>
+   <div class="detail-options">
+    <div class="setting-row">
+     <label class="threshold-control">
+      <span class="label-text">編集点合わせの許容ずれ（秒）</span>
+      <input type="number" id="snapThresholdInput" value="1" min="0" step="0.001">
+      <span class="option-desc">字幕境界がこの秒数以内なら吸着し、超える場合は字幕の途中にあるEDL編集点で分割します。</span>
+     </label>
+    </div>
+
+    <label class="option single-option">
+     <input type="checkbox" id="offsetCheckbox">
+     <span>
+      <span class="option-title">1msオフセットを有効にする</span>
+      <span class="option-desc">字幕クリップが1フレームずれる場合に使用します。</span>
+     </span>
+    </label>
+   </div>
   </section>
 
   <section class="section actions">
@@ -428,8 +448,5 @@
 </main>
 
 <script src="script.js"></script>
-<script>
-function setFps(v){ document.getElementById('fpsInput').value = v; }
-</script>
 </body>
 </html>
